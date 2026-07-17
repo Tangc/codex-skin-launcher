@@ -9,12 +9,13 @@ Codex Skin Launcher 通过 Chrome DevTools Protocol 向本机 Codex 页面注入
 ## 本地数据
 
 - 背景图经过本地压缩后保存，不会上传。
-- 配置和日志位于 `~/Library/Application Support/Codex Skin Launcher/`。
+- macOS 配置和日志位于 `~/Library/Application Support/Codex Skin Launcher/`。
+- Windows 配置和背景图位于 `%LOCALAPPDATA%\Codex Skin Launcher\`。
 - 项目不会读取 Codex 对话内容，也不会修改 Codex 安装包。
 
 ## 发布包
 
-GitHub Release 中的应用使用临时签名，没有 Apple Developer ID 公证。对安全要求较高的用户应审阅源码并自行构建。
+GitHub Release 中的 macOS 应用使用临时签名，没有 Apple Developer ID 公证；Windows EXE 当前也没有代码签名。Windows Defender SmartScreen 或 macOS Gatekeeper 可能给出来源提示。对安全要求较高的用户应审阅源码并自行构建。
 
 ## 报告问题
 

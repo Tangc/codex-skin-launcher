@@ -1,0 +1,52 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "windows/**"
+      - "scripts/build-windows.ps1"
+      - ".github/workflows/windows-build.yml"
+  pull_request:
+    paths:
+      - "windows/**"
+      - "scripts/build-windows.ps1"
+      - ".github/workflows/windows-build.yml"
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build self-contained Windows launcher
+        shell: pwsh
+        run: ./scripts/build-windows.ps1
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CodexSkinLauncher-windows-x64
+          path: dist/CodexSkinLauncher-windows-x64.zip
+          if-no-files-found: error
+
+      - name: Attach Windows package to release
+        if: github.event_name == 'release'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "dist/CodexSkinLauncher-windows-x64.zip" --clobber
