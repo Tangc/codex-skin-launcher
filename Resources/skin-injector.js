@@ -22,6 +22,8 @@ const testRateLimitJSON = process.env.CODEX_SKIN_TEST_RATE_LIMIT_JSON || "";
 const logPath = path.join(path.dirname(statusPath), "injector.log");
 const layoutSourcePath = path.join(path.dirname(process.argv[1]), "layout-themes.js");
 const layoutSource = fs.readFileSync(layoutSourcePath, "utf8");
+const sidebarFilterSourcePath = path.join(path.dirname(process.argv[1]), "sidebar-filter.js");
+const sidebarFilterSource = fs.readFileSync(sidebarFilterSourcePath, "utf8");
 const sessions = new Map();
 
 let currentCSS = "";
@@ -84,7 +86,7 @@ function layoutDisplayName(name) {
 function rebuildLayoutExpression() {
   const layoutJSON = JSON.stringify(currentLayoutConfig);
   const quotaJSON = JSON.stringify(currentQuotaState);
-  currentLayoutExpression = `${layoutSource}\n;globalThis.__codexSkinLayoutEngine.apply(${layoutJSON});globalThis.__codexSkinLayoutEngine.updateQuota(${quotaJSON});`;
+  currentLayoutExpression = `${layoutSource}\n${sidebarFilterSource}\n;globalThis.__codexSkinLayoutEngine.apply(${layoutJSON});globalThis.__codexSkinLayoutEngine.updateQuota(${quotaJSON});globalThis.__codexSkinSidebarFilter.apply({enabled:true});`;
   currentLayoutHash = crypto.createHash("sha256").update(`${layoutJSON}\0${quotaJSON}`).digest("hex");
 }
 

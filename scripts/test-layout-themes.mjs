@@ -136,6 +136,78 @@ try {
     console.log(`PASS ${theme}`);
   }
 
+  const filterUrl = pathToFileURL(path.join(projectDirectory, "tests", "sidebar-filter-harness.html")).href;
+  await connection.request("Page.navigate", { url: filterUrl });
+  let filterReady = false;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    await sleep(75);
+    const evaluation = await connection.request("Runtime.evaluate", {
+      expression: `Boolean(globalThis.__sidebarFilterHarnessReady && document.getElementById("codex-skin-sidebar-filter-host")?.shadowRoot)`,
+      returnByValue: true,
+    });
+    filterReady = evaluation.result?.value === true;
+    if (filterReady) break;
+  }
+  if (!filterReady) throw new Error("侧边栏筛选器没有挂载");
+
+  const filterEvaluation = await connection.request("Runtime.evaluate", {
+    expression: `(async () => {
+      const api = globalThis.__codexSkinSidebarFilter;
+      const host = document.getElementById("codex-skin-sidebar-filter-host");
+      const shadow = host.shadowRoot;
+      const input = shadow.querySelector("input");
+      const hidden = (selector) => document.querySelector(selector)?.hasAttribute("data-codex-sidebar-filter-hidden");
+      const wait = (milliseconds = 180) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+      const type = async (value) => {
+        input.value = value;
+        input.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+        await wait();
+      };
+      const assert = (condition, message) => { if (!condition) throw new Error(message); };
+
+      assert(api.getState().total === 4, "初始任务数量错误");
+      assert(api.getState().running === 1, "初始执行中数量错误");
+
+      await type("Windows");
+      assert(input.value === "Windows", "搜索框不应改写用户输入");
+      assert(!hidden('[data-test-task="windows"]'), "任务名称匹配失败");
+      assert(hidden('[data-test-task="docs"]'), "未匹配任务没有隐藏");
+      assert(hidden('[data-test-task="pinned-release"]'), "未匹配置顶任务没有隐藏");
+      assert(!hidden('[data-test-project="alpha"]') && hidden('[data-test-project="beta"]'), "任务所属项目显示错误");
+
+      await type("Alpha Workspace");
+      assert(!hidden('[data-test-task="windows"]') && !hidden('[data-test-task="docs"]'), "项目名称匹配没有显示项目任务");
+      assert(hidden('[data-test-helper]'), "筛选时辅助行应隐藏");
+
+      await type("");
+      shadow.querySelector('button[data-mode="running"]').click();
+      await wait();
+      assert(api.getState().mode === "running" && api.getState().visible === 1, "执行中筛选结果错误");
+      assert(!hidden('[data-test-task="windows"]') && hidden('[data-test-task="background"]'), "执行中任务显示错误");
+
+      document.querySelector('[data-test-status]').classList.add("animate-spin");
+      await wait();
+      assert(api.getState().running === 2 && api.getState().visible === 2, "运行状态变化没有实时更新");
+      assert(!hidden('[data-test-project="beta"]'), "新增执行中任务的项目没有显示");
+
+      shadow.querySelector(".clear-query").click();
+      await wait(40);
+      assert(api.getState().mode === "all" && api.getState().query === "" && api.getState().visible === 4, "清除筛选没有恢复列表");
+      assert(!hidden('[data-test-helper]'), "清除筛选没有恢复辅助行");
+
+      await type("不存在的任务");
+      assert(!shadow.querySelector('[data-field="empty"]').hidden, "空结果提示没有显示");
+      api.setFilter({ query: "", mode: "all" });
+      return api.getState();
+    })()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  if (filterEvaluation.exceptionDetails) {
+    throw new Error(filterEvaluation.exceptionDetails.exception?.description || "侧边栏筛选测试失败");
+  }
+  console.log("PASS sidebar-filter");
+
   const cleanUrl = `${pathToFileURL(path.join(projectDirectory, "tests", "layout-harness.html")).href}?theme=original`;
   await connection.request("Page.navigate", { url: cleanUrl });
   await sleep(250);
@@ -195,20 +267,31 @@ try {
     await sleep(100);
     const evaluation = await connection.request("Runtime.evaluate", {
       expression: `document.documentElement.dataset.codexLayoutTheme === "qq2007"
-        && document.getElementById("codex-skin-layout-host")?.shadowRoot?.querySelector(".quota-bar")?.getAttribute("aria-valuenow") === "28"`,
+        && document.getElementById("codex-skin-layout-host")?.shadowRoot?.querySelector(".quota-bar")?.getAttribute("aria-valuenow") === "28"
+        && typeof globalThis.__codexSkinSidebarFilter?.apply === "function"`,
       returnByValue: true,
     });
     injectorPassed = evaluation.result?.value === true;
     if (injectorPassed) break;
   }
   if (!injectorPassed) throw new Error("CDP 注入器没有应用 QQ 2007 布局");
-  const injectorStatus = JSON.parse(fs.readFileSync(statusPath, "utf8"));
+  let injectorStatus = null;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    if (fs.existsSync(statusPath)) {
+      injectorStatus = JSON.parse(fs.readFileSync(statusPath, "utf8"));
+      if (injectorStatus.state === "connected") break;
+    }
+    await sleep(50);
+  }
+  if (!injectorStatus) throw new Error("CDP 注入器没有写入状态");
   if (injectorStatus.state !== "connected") throw new Error(`CDP 注入器状态异常：${injectorStatus.message}`);
   if (injectorStatus.targetCount !== 1) throw new Error(`CDP 注入器错误连接了 ${injectorStatus.targetCount} 个窗口`);
   console.log("PASS cdp-injector");
 
   const auxiliaryEvaluation = await auxiliaryConnection.request("Runtime.evaluate", {
-    expression: `!document.documentElement.hasAttribute("data-codex-layout-theme") && !document.getElementById("codex-skin-layout-host")`,
+    expression: `!document.documentElement.hasAttribute("data-codex-layout-theme")
+      && !document.getElementById("codex-skin-layout-host")
+      && !globalThis.__codexSkinSidebarFilter`,
     returnByValue: true,
   });
   if (auxiliaryEvaluation.result?.value !== true) throw new Error("桌面宠物模拟窗口被错误注入皮肤");

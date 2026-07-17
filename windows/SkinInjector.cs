@@ -203,7 +203,7 @@ internal sealed class SkinInjector : IAsyncDisposable
             backgroundColor = config.BackgroundColor,
             foregroundColor = config.ForegroundColor
         });
-        return ($"{LayoutThemeScript.Source}\n;globalThis.__codexSkinLayoutEngine.apply({payload});", HashText(payload));
+        return ($"{LayoutThemeScript.Source}\n{SidebarFilterScript.Source}\n;globalThis.__codexSkinLayoutEngine.apply({payload});globalThis.__codexSkinSidebarFilter.apply({{enabled:true}});", HashText(payload));
     }
 
     public async ValueTask DisposeAsync()
@@ -339,6 +339,19 @@ internal static class LayoutThemeScript
     {
         using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("CodexSkinLauncher.LayoutThemes.js")
             ?? throw new InvalidOperationException("布局主题资源缺失");
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return reader.ReadToEnd();
+    }
+}
+
+internal static class SidebarFilterScript
+{
+    public static string Source { get; } = Load();
+
+    private static string Load()
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("CodexSkinLauncher.SidebarFilter.js")
+            ?? throw new InvalidOperationException("侧边栏筛选资源缺失");
         using var reader = new StreamReader(stream, Encoding.UTF8);
         return reader.ReadToEnd();
     }

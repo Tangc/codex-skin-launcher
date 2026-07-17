@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>侧边栏筛选测试</title>
+  <style>
+    :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0d1117; color: #e8edf5; }
+    .sidebar-shell { width: 280px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: #151c28; }
+    nav { min-height: 0; display: flex; flex: 1; flex-direction: column; overflow-y: auto; padding: 6px 8px 20px; }
+    [role="list"] { display: flex; flex-direction: column; gap: 1px; }
+    [role="listitem"] { min-height: 30px; }
+    [data-sidebar-project-kind] { display: flex; flex-direction: column; }
+    [role="button"] { min-height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-radius: 8px; }
+    .overflow-hidden { overflow: hidden; padding-left: 12px; }
+    .animate-spin { width: 12px; height: 12px; border: 2px solid #7c9cff; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="sidebar-shell">
+    <nav class="sidebar-foreground-muted" role="navigation" aria-label="已安排任务文件夹">
+      <section aria-label="置顶任务">
+        <div role="list">
+          <div role="listitem" data-test-task="pinned-release">
+            <div role="button"><span>发布正式版本</span><span></span></div>
+          </div>
+        </div>
+      </section>
+      <section aria-label="项目">
+        <div role="list">
+          <div class="group/cwd relative flex flex-col" role="listitem" data-sidebar-project-kind="local" aria-label="Alpha Workspace" data-test-project="alpha">
+            <span class="contents"><div role="button"><span>Alpha Workspace</span></div></span>
+            <div class="overflow-hidden">
+              <div role="list">
+                <div role="listitem" data-test-task="windows">
+                  <div role="button"><span>Windows 皮肤验证</span><span><span class="animate-spin"></span></span></div>
+                </div>
+                <div role="listitem" data-test-task="docs">
+                  <div role="button"><span>补充产品说明</span><span></span></div>
+                </div>
+                <div role="listitem" data-test-helper><button type="button">显示更多</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="group/cwd relative flex flex-col" role="listitem" data-sidebar-project-kind="local" aria-label="Beta Workspace" data-test-project="beta">
+            <span class="contents"><div role="button"><span>Beta Workspace</span></div></span>
+            <div class="overflow-hidden">
+              <div role="list">
+                <div role="listitem" data-test-task="background">
+                  <div role="button"><span>背景图片适配</span><span data-test-status></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </nav>
+  </div>
+  <script src="../Resources/sidebar-filter.js"></script>
+  <script>
+    globalThis.__codexSkinSidebarFilter.apply({ enabled: true });
+    globalThis.__sidebarFilterHarnessReady = true;
+  </script>
+</body>
+</html>
