@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import crypto from "node:crypto";
+import { isMainCodexTarget } from "./target-filter.js";
 
 function argument(name, fallback = "") {
   const index = process.argv.indexOf(name);
@@ -14,6 +15,7 @@ const configPath = argument("--config");
 const statusPath = argument("--status");
 const port = Number(argument("--port", "9333"));
 const parentPid = Number(argument("--parent-pid", "0"));
+const testTargetURL = process.env.CODEX_SKIN_TEST_TARGET_URL || "";
 const logPath = path.join(path.dirname(statusPath), "injector.log");
 const layoutSourcePath = path.join(path.dirname(process.argv[1]), "layout-themes.js");
 const layoutSource = fs.readFileSync(layoutSourcePath, "utf8");
@@ -362,7 +364,7 @@ async function listTargets() {
   const response = await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(1800) });
   if (!response.ok) throw new Error(`调试端口返回 ${response.status}`);
   const targets = await response.json();
-  return targets.filter((target) => target.type === "page" && target.webSocketDebuggerUrl);
+  return targets.filter((target) => isMainCodexTarget(target, testTargetURL));
 }
 
 async function tick() {
@@ -414,7 +416,7 @@ async function tick() {
     writeStatus("error", 0, "皮肤注入失败", lastError);
   } else {
     const layoutStatus = currentLayoutName !== "original" ? `，${layoutDisplayName(currentLayoutName)}布局已启用` : "";
-    writeStatus("connected", sessions.size, currentCSS ? `皮肤已应用到 ${sessions.size} 个窗口${layoutStatus}` : "已恢复 Codex 原始外观");
+    writeStatus("connected", sessions.size, currentCSS ? `皮肤已应用到 ${sessions.size} 个主窗口${layoutStatus}` : "已恢复 Codex 原始外观");
   }
 }
 

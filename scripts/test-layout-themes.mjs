@@ -6,6 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import assert from "node:assert/strict";
+import { isMainCodexTarget, targetFixtures } from "../Resources/target-filter.js";
 
 const projectDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const chromeCandidates = [
@@ -16,6 +18,13 @@ const chromeCandidates = [
   process.env.PROGRAMFILES && path.join(process.env.PROGRAMFILES, "Google", "Chrome", "Application", "chrome.exe"),
 ].filter(Boolean);
 const chromePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
+
+const targetBase = { type: "page", webSocketDebuggerUrl: "ws://127.0.0.1/devtools/page/test" };
+assert.equal(isMainCodexTarget({ ...targetBase, url: targetFixtures.main }), true);
+assert.equal(isMainCodexTarget({ ...targetBase, url: targetFixtures.avatarOverlay }), false);
+assert.equal(isMainCodexTarget({ ...targetBase, url: targetFixtures.petSurface }), false);
+assert.equal(isMainCodexTarget({ ...targetBase, url: "app://-/index.html?initialRoute=%2Fsettings" }), false);
+console.log("PASS target-filter-fixtures");
 
 if (!chromePath) {
   console.log("Chrome 未安装，跳过浏览器级布局测试。");
@@ -89,6 +98,7 @@ const chrome = spawn(chromePath, [
   "about:blank",
 ], { stdio: "ignore" });
 let injector = null;
+let auxiliaryConnection = null;
 
 try {
   await waitForFile(activePortPath);
@@ -129,6 +139,12 @@ try {
   const cleanUrl = `${pathToFileURL(path.join(projectDirectory, "tests", "layout-harness.html")).href}?theme=original`;
   await connection.request("Page.navigate", { url: cleanUrl });
   await sleep(250);
+  const auxiliaryUrl = `${pathToFileURL(path.join(projectDirectory, "tests", "layout-harness.html")).href}?theme=original&role=desktop-pet`;
+  const auxiliaryTarget = await fetch(`http://127.0.0.1:${port}/json/new?${encodeURIComponent(auxiliaryUrl)}`, { method: "PUT" }).then((response) => response.json());
+  auxiliaryConnection = new CdpConnection(auxiliaryTarget.webSocketDebuggerUrl);
+  await auxiliaryConnection.connect();
+  await auxiliaryConnection.request("Runtime.enable");
+  await sleep(200);
   const configPath = path.join(temporaryDirectory, "config.json");
   const statusPath = path.join(temporaryDirectory, "status.json");
   fs.writeFileSync(configPath, JSON.stringify({
@@ -153,7 +169,7 @@ try {
     "--status", statusPath,
     "--port", port,
     "--parent-pid", String(process.pid),
-  ], { stdio: "ignore" });
+  ], { stdio: "ignore", env: { ...process.env, CODEX_SKIN_TEST_TARGET_URL: cleanUrl } });
 
   let injectorPassed = false;
   for (let attempt = 0; attempt < 60; attempt++) {
@@ -168,7 +184,15 @@ try {
   if (!injectorPassed) throw new Error("CDP 注入器没有应用 QQ 2007 布局");
   const injectorStatus = JSON.parse(fs.readFileSync(statusPath, "utf8"));
   if (injectorStatus.state !== "connected") throw new Error(`CDP 注入器状态异常：${injectorStatus.message}`);
+  if (injectorStatus.targetCount !== 1) throw new Error(`CDP 注入器错误连接了 ${injectorStatus.targetCount} 个窗口`);
   console.log("PASS cdp-injector");
+
+  const auxiliaryEvaluation = await auxiliaryConnection.request("Runtime.evaluate", {
+    expression: `!document.documentElement.hasAttribute("data-codex-layout-theme") && !document.getElementById("codex-skin-layout-host")`,
+    returnByValue: true,
+  });
+  if (auxiliaryEvaluation.result?.value !== true) throw new Error("桌面宠物模拟窗口被错误注入皮肤");
+  console.log("PASS cdp-main-window-only");
 
   const restoredConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
   restoredConfig.layoutTheme = "original";
@@ -187,9 +211,12 @@ try {
   console.log("PASS cdp-restore");
   injector.kill("SIGTERM");
   injector = null;
+  auxiliaryConnection.close();
+  auxiliaryConnection = null;
   connection.close();
 } finally {
   injector?.kill("SIGTERM");
+  auxiliaryConnection?.close();
   chrome.kill("SIGTERM");
   await Promise.race([new Promise((resolve) => chrome.once("exit", resolve)), sleep(1500)]);
   if (chrome.exitCode === null) chrome.kill("SIGKILL");
