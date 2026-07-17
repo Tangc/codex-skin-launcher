@@ -26,6 +26,7 @@ static NSInteger const DebuggingPort = 9333;
 @property(nonatomic, strong) NSTextField *uiFontField;
 @property(nonatomic, strong) NSTextField *codeFontField;
 @property(nonatomic, strong) NSButton *enabledSwitch;
+@property(nonatomic, strong) NSButton *quotaBarSwitch;
 @property(nonatomic, strong) NSButton *restartButton;
 @property(nonatomic, strong) NSTask *injectorTask;
 @property(nonatomic, strong) NSTimer *statusTimer;
@@ -221,13 +222,21 @@ static NSInteger const DebuggingPort = 9333;
     self.codeFontField.delegate = self;
     [fontContent addSubview:self.codeFontField];
 
-    self.enabledSwitch = [[NSButton alloc] initWithFrame:NSMakeRect(29, 51, 120, 28)];
+    self.enabledSwitch = [[NSButton alloc] initWithFrame:NSMakeRect(29, 51, 145, 28)];
     self.enabledSwitch.buttonType = NSButtonTypeSwitch;
     self.enabledSwitch.title = @"启用皮肤与布局";
     self.enabledSwitch.target = self;
     self.enabledSwitch.action = @selector(settingsChanged:);
     self.enabledSwitch.contentTintColor = [NSColor colorWithWhite:0.92 alpha:1];
     [root addSubview:self.enabledSwitch];
+
+    self.quotaBarSwitch = [[NSButton alloc] initWithFrame:NSMakeRect(188, 51, 170, 28)];
+    self.quotaBarSwitch.buttonType = NSButtonTypeSwitch;
+    self.quotaBarSwitch.title = @"显示实时额度血条";
+    self.quotaBarSwitch.target = self;
+    self.quotaBarSwitch.action = @selector(settingsChanged:);
+    self.quotaBarSwitch.contentTintColor = [NSColor colorWithWhite:0.92 alpha:1];
+    [root addSubview:self.quotaBarSwitch];
 
     self.restartButton = [self button:@"重新启动 Codex" frame:NSMakeRect(568, 45, 168, 36) action:@selector(restartCodex:) primary:YES];
     [root addSubview:self.restartButton];
@@ -261,6 +270,7 @@ static NSInteger const DebuggingPort = 9333;
 - (NSDictionary *)defaultSettings {
     return @{
         @"enabled": @YES,
+        @"quotaBarEnabled": @YES,
         @"layoutTheme": @"original",
         @"selectedImagePath": @"",
         @"backgroundImagePath": @"",
@@ -287,6 +297,7 @@ static NSInteger const DebuggingPort = 9333;
     }
 
     self.enabledSwitch.state = [settings[@"enabled"] boolValue] ? NSControlStateValueOn : NSControlStateValueOff;
+    self.quotaBarSwitch.state = [settings[@"quotaBarEnabled"] boolValue] ? NSControlStateValueOn : NSControlStateValueOff;
     NSString *layoutTheme = settings[@"layoutTheme"] ?: @"original";
     NSInteger layoutIndex = [layoutTheme isEqualToString:@"wechat"] ? 1 : ([layoutTheme isEqualToString:@"feishu"] ? 2 : ([layoutTheme isEqualToString:@"qq2007"] ? 3 : 0));
     [self.layoutPicker selectItemAtIndex:layoutIndex];
@@ -327,6 +338,7 @@ static NSInteger const DebuggingPort = 9333;
 - (void)saveSettings {
     NSDictionary *settings = @{
         @"enabled": @(self.enabledSwitch.state == NSControlStateValueOn),
+        @"quotaBarEnabled": @(self.quotaBarSwitch.state == NSControlStateValueOn),
         @"layoutTheme": @[@"original", @"wechat", @"feishu", @"qq2007"][MAX(0, MIN(3, self.layoutPicker.indexOfSelectedItem))],
         @"selectedImagePath": self.selectedImagePath ?: @"",
         @"backgroundImagePath": self.backgroundImagePath ?: @"",
@@ -504,8 +516,11 @@ static NSInteger const DebuggingPort = 9333;
 
 - (BOOL)startInjectorForCodexURL:(NSURL *)appURL error:(NSError **)error {
     NSString *nodePath = [appURL.path stringByAppendingPathComponent:@"Contents/Resources/cua_node/bin/node"];
+    NSString *codexPath = [appURL.path stringByAppendingPathComponent:@"Contents/Resources/codex"];
     NSString *scriptPath = [[NSBundle mainBundle] pathForResource:@"skin-injector" ofType:@"js"];
-    if (![[NSFileManager defaultManager] isExecutableFileAtPath:nodePath] || !scriptPath) {
+    if (![[NSFileManager defaultManager] isExecutableFileAtPath:nodePath] ||
+        ![[NSFileManager defaultManager] isExecutableFileAtPath:codexPath] ||
+        !scriptPath) {
         if (error) *error = [NSError errorWithDomain:@"CodexSkinLauncher" code:2 userInfo:@{NSLocalizedDescriptionKey: @"Codex 内置运行环境或注入器资源缺失"}];
         return NO;
     }
@@ -517,6 +532,7 @@ static NSInteger const DebuggingPort = 9333;
         @"--config", self.configPath,
         @"--status", self.statusPath,
         @"--port", [NSString stringWithFormat:@"%ld", (long)DebuggingPort],
+        @"--codex-bin", codexPath,
         @"--parent-pid", [NSString stringWithFormat:@"%d", NSProcessInfo.processInfo.processIdentifier]
     ];
     task.currentDirectoryURL = [NSURL fileURLWithPath:self.supportDirectory];

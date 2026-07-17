@@ -43,17 +43,41 @@
   <script src="../Resources/layout-themes.js"></script>
   <script>
     const requestedTheme = new URLSearchParams(location.search).get("theme") || "qq2007";
-    const result = globalThis.__codexSkinLayoutEngine.apply({
+    const isAuxiliaryWindow = new URLSearchParams(location.search).get("role") === "desktop-pet";
+    const engine = globalThis.__codexSkinLayoutEngine;
+    const result = engine.apply({
       enabled: true,
       layoutTheme: requestedTheme,
+      quotaBarEnabled: !isAuxiliaryWindow,
       accentColor: "#7C9CFF",
       backgroundColor: "#0D1117",
       foregroundColor: "#E8EDF5"
     });
+    if (!isAuxiliaryWindow) {
+      engine.updateQuota({
+        status: "ready",
+        updatedAt: new Date().toISOString(),
+        result: {
+          rateLimits: {
+            limitId: "codex",
+            primary: { usedPercent: 63, windowDurationMins: 300, resetsAt: Math.floor(Date.now() / 1000) + 3600 }
+          },
+          rateLimitsByLimitId: null,
+          rateLimitResetCredits: { availableCount: 1 }
+        }
+      });
+    }
     const host = document.getElementById("codex-skin-layout-host");
-    const passed = requestedTheme === "original"
-      ? !result.active && !host && !document.documentElement.hasAttribute("data-codex-layout-theme")
+    const layoutPassed = requestedTheme === "original"
+      ? !result.active && host && !document.documentElement.hasAttribute("data-codex-layout-theme")
       : result.active && host && host.shadowRoot && document.documentElement.dataset.codexLayoutTheme === requestedTheme;
+    const quotaBar = host?.shadowRoot?.querySelector(".quota-bar");
+    const quotaPassed = quotaBar?.getAttribute("aria-valuenow") === "37"
+      && quotaBar?.dataset.level === "warning"
+      && host?.shadowRoot?.querySelector('[data-field="quota-summary"]')?.textContent.includes("37%")
+      && host?.shadowRoot?.querySelector('[data-field="quota-detail"]')?.textContent.includes("5小时窗口")
+      && host?.shadowRoot?.querySelector('[data-field="quota-extra"]')?.textContent.includes("1 次可用重置");
+    const passed = isAuxiliaryWindow ? !host : layoutPassed && quotaPassed;
     const output = document.getElementById("test-result");
     output.textContent = passed ? `PASS:${requestedTheme}` : `FAIL:${requestedTheme}`;
     output.dataset.passed = String(Boolean(passed));

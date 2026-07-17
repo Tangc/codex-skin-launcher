@@ -8,11 +8,13 @@
   const STYLE_ID = "codex-skin-layout-style";
   const THEMES = new Set(["original", "wechat", "feishu", "qq2007"]);
   const state = {
-    config: { enabled: true, layoutTheme: "original" },
+    config: { enabled: true, layoutTheme: "original", quotaBarEnabled: false },
+    quota: { status: "loading", result: null, message: "正在读取 Codex 额度" },
     host: null,
     observer: null,
     refreshTimer: 0,
     clockTimer: 0,
+    quotaTimer: 0,
   };
 
   const labels = {
@@ -50,6 +52,7 @@
     return {
       enabled: config.enabled !== false,
       layoutTheme: THEMES.has(requested) ? requested : "original",
+      quotaBarEnabled: config.quotaBarEnabled === true,
       accentColor: validHex(config.accentColor, "#7C9CFF"),
       backgroundColor: validHex(config.backgroundColor, "#0D1117"),
       foregroundColor: validHex(config.foregroundColor, "#E8EDF5"),
@@ -58,6 +61,14 @@
 
   function shellMarkup() {
     return `
+      <div class="quota-bar" data-level="unknown" data-status="loading" role="progressbar" aria-label="Codex 剩余额度" aria-valuemin="0" aria-valuemax="100">
+        <div class="quota-track"><div class="quota-fill"></div></div>
+        <div class="quota-popover" role="status">
+          <strong data-field="quota-summary">正在读取 Codex 额度…</strong>
+          <span data-field="quota-detail">额度变化后会自动更新</span>
+          <small data-field="quota-extra"></small>
+        </div>
+      </div>
       <div class="shell" role="presentation">
         <header class="topbar">
           <div class="identity">
@@ -110,7 +121,8 @@
       *, *::before, *::after { box-sizing: border-box; }
       button { font: inherit; }
       svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-      .shell { --top: 48px; --right: 252px; --bottom: 26px; --shell-bg: rgb(20 25 35 / .94); --shell-panel: rgb(29 35 47 / .92); --shell-fg: #eef3fa; --shell-muted: #9ba8ba; --shell-border: rgb(255 255 255 / .12); --shell-shadow: 0 10px 35px rgb(0 0 0 / .22); color: var(--shell-fg); }
+      .shell { display: none; --top: 48px; --right: 252px; --bottom: 26px; --shell-bg: rgb(20 25 35 / .94); --shell-panel: rgb(29 35 47 / .92); --shell-fg: #eef3fa; --shell-muted: #9ba8ba; --shell-border: rgb(255 255 255 / .12); --shell-shadow: 0 10px 35px rgb(0 0 0 / .22); color: var(--shell-fg); }
+      :host([data-layout-active="true"]) .shell { display: block; }
       .topbar, .right-dock, .statusbar { position: fixed; z-index: 900; pointer-events: auto; }
       .topbar { inset: 0 0 auto 0; height: var(--top); display: flex; align-items: center; gap: 18px; padding: 0 14px; background: var(--shell-bg); border-bottom: 1px solid var(--shell-border); box-shadow: var(--shell-shadow); }
       .identity { display: flex; align-items: center; gap: 9px; min-width: 176px; }
@@ -147,6 +159,24 @@
       .statusbar span:nth-child(2) { margin-left: auto; }
       .toast { position: fixed; z-index: 950; left: 50%; bottom: calc(var(--bottom) + 16px); transform: translate(-50%, 10px); padding: 8px 13px; border-radius: 9px; color: var(--shell-fg); background: var(--shell-bg); border: 1px solid var(--shell-border); box-shadow: var(--shell-shadow); font-size: 11px; opacity: 0; pointer-events: none; transition: .18s ease; }
       .toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+      .quota-bar { position: fixed; z-index: 1100; inset: auto 0 0 0; height: 10px; padding-top: 3px; pointer-events: auto; color: #f7fafc; --quota-color: #8b96a8; }
+      :host([data-quota-enabled="false"]) .quota-bar { display: none; }
+      .quota-track { position: absolute; inset: auto 0 0; height: 7px; overflow: hidden; background: rgb(10 14 20 / .62); border-top: 1px solid rgb(255 255 255 / .12); box-shadow: 0 -1px 8px rgb(0 0 0 / .22); }
+      .quota-fill { width: 100%; height: 100%; transform-origin: left center; background: var(--quota-color); box-shadow: 0 0 10px color-mix(in srgb, var(--quota-color) 65%, transparent); transition: width .55s cubic-bezier(.16, 1, .3, 1), background-color .25s ease; }
+      .quota-bar[data-level="healthy"] { --quota-color: #35c96f; }
+      .quota-bar[data-level="warning"] { --quota-color: #f2b84b; }
+      .quota-bar[data-level="critical"] { --quota-color: #f05252; }
+      .quota-bar[data-status="loading"] .quota-fill { width: 35%; background: linear-gradient(90deg, transparent, #7c9cff, transparent); animation: quota-loading 1.25s ease-in-out infinite; }
+      .quota-bar[data-status="error"] .quota-fill, .quota-bar[data-status="unavailable"] .quota-fill { width: 100%; opacity: .6; background: repeating-linear-gradient(135deg, #7b8492 0 8px, #59616d 8px 16px); }
+      .quota-bar[data-status="stale"] .quota-fill { opacity: .68; }
+      .quota-popover { position: absolute; right: 12px; bottom: 15px; width: min(390px, calc(100vw - 24px)); padding: 11px 13px; border: 1px solid rgb(255 255 255 / .14); border-radius: 11px; color: #f5f7fa; background: rgb(20 25 35 / .96); box-shadow: 0 12px 38px rgb(0 0 0 / .34); opacity: 0; transform: translateY(7px); pointer-events: none; transition: .16s ease; }
+      .quota-bar:hover .quota-popover, .quota-bar:focus-within .quota-popover { opacity: 1; transform: translateY(0); }
+      .quota-popover strong, .quota-popover span, .quota-popover small { display: block; }
+      .quota-popover strong { font-size: 13px; line-height: 1.35; }
+      .quota-popover span { margin-top: 5px; color: #c5ccd7; font-size: 11px; line-height: 1.5; white-space: pre-line; }
+      .quota-popover small { min-height: 1em; margin-top: 5px; color: #8f9aab; font-size: 10px; line-height: 1.45; }
+      @keyframes quota-loading { from { transform: translateX(-110%); } to { transform: translateX(380%); } }
 
       :host([data-theme="wechat"]) .shell { --top: 46px; --right: 248px; --bottom: 25px; --accent: #07c160; --shell-bg: rgb(38 40 43 / .97); --shell-panel: rgb(245 247 248 / .96); --shell-fg: #f4f4f4; --shell-muted: #aeb2b7; --shell-border: rgb(0 0 0 / .13); }
       :host([data-theme="wechat"]) .right-dock { color: #202326; }
@@ -283,6 +313,140 @@
     }
   }
 
+  function clampPercent(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(0, Math.min(100, number)) : null;
+  }
+
+  function windowDurationLabel(minutes, fallback) {
+    const value = Number(minutes);
+    if (!Number.isFinite(value) || value <= 0) return fallback;
+    if (value % 10080 === 0) return `${value / 10080}周窗口`;
+    if (value % 1440 === 0) return `${value / 1440}天窗口`;
+    if (value % 60 === 0) return `${value / 60}小时窗口`;
+    return `${Math.round(value)}分钟窗口`;
+  }
+
+  function resetLabel(timestamp) {
+    const milliseconds = Number(timestamp) * 1000;
+    if (!Number.isFinite(milliseconds) || milliseconds <= 0) return "";
+    const remaining = milliseconds - Date.now();
+    if (remaining <= 60_000) return "即将重置";
+    if (remaining < 3_600_000) return `${Math.ceil(remaining / 60_000)}分钟后重置`;
+    if (remaining < 86_400_000) return `${Math.ceil(remaining / 3_600_000)}小时后重置`;
+    return `${Math.ceil(remaining / 86_400_000)}天后重置`;
+  }
+
+  function quotaSnapshots(result) {
+    const buckets = result?.rateLimitsByLimitId && typeof result.rateLimitsByLimitId === "object"
+      ? Object.entries(result.rateLimitsByLimitId).filter(([, snapshot]) => snapshot && typeof snapshot === "object")
+      : [];
+    if (buckets.length) return buckets;
+    return result?.rateLimits && typeof result.rateLimits === "object"
+      ? [[result.rateLimits.limitId || "codex", result.rateLimits]]
+      : [];
+  }
+
+  function quotaWindows(result) {
+    const entries = [];
+    for (const [bucketId, snapshot] of quotaSnapshots(result)) {
+      const bucketLabel = snapshot.limitName || snapshot.limitId || bucketId || "Codex";
+      for (const [key, fallback] of [["primary", "主额度"], ["secondary", "次额度"]]) {
+        const window = snapshot[key];
+        const used = clampPercent(window?.usedPercent);
+        if (used === null) continue;
+        entries.push({
+          bucketLabel,
+          windowLabel: windowDurationLabel(window.windowDurationMins, fallback),
+          remaining: Math.round((100 - used) * 10) / 10,
+          resetsAt: window.resetsAt,
+        });
+      }
+    }
+    return entries.sort((left, right) => left.remaining - right.remaining);
+  }
+
+  function quotaExtras(result) {
+    const extras = [];
+    const snapshots = quotaSnapshots(result).map(([, snapshot]) => snapshot);
+    if (result?.rateLimits && !snapshots.includes(result.rateLimits)) snapshots.push(result.rateLimits);
+    const creditSnapshots = snapshots.map((snapshot) => snapshot.credits).filter(Boolean);
+    const unlimited = creditSnapshots.some((credits) => credits.unlimited === true);
+    const balance = creditSnapshots.map((credits) => credits.balance).find((value) => value !== null && value !== undefined && value !== "");
+    if (unlimited) extras.push("Credits 不限");
+    else if (balance !== undefined) extras.push(`Credits ${balance}`);
+    const resetCount = Number(result?.rateLimitResetCredits?.availableCount);
+    if (Number.isFinite(resetCount) && resetCount > 0) extras.push(`${resetCount} 次可用重置`);
+    return extras;
+  }
+
+  function setQuotaText(name, value) {
+    const node = state.host?.shadowRoot?.querySelector(`[data-field="${name}"]`);
+    if (node) node.textContent = value;
+  }
+
+  function updateQuotaView() {
+    const bar = state.host?.shadowRoot?.querySelector(".quota-bar");
+    if (!bar) return;
+    const status = state.quota?.status || "unavailable";
+    const windows = quotaWindows(state.quota?.result);
+    const hasSnapshot = windows.length > 0;
+
+    if (!hasSnapshot) {
+      const displayStatus = status === "loading" ? "loading" : (status === "unavailable" ? "unavailable" : "error");
+      bar.dataset.status = displayStatus;
+      bar.dataset.level = "unknown";
+      bar.removeAttribute("aria-valuenow");
+      setQuotaText("quota-summary", status === "loading" ? "正在读取 Codex 额度…" : "Codex 额度暂不可用");
+      setQuotaText("quota-detail", state.quota?.message || "请确认当前使用 ChatGPT 账号登录 Codex");
+      setQuotaText("quota-extra", "");
+      bar.title = state.quota?.message || "Codex 额度暂不可用";
+      return;
+    }
+
+    const binding = windows[0];
+    const remaining = binding.remaining;
+    const level = remaining > 60 ? "healthy" : (remaining > 20 ? "warning" : "critical");
+    const stale = status !== "ready";
+    bar.dataset.status = stale ? "stale" : "ready";
+    bar.dataset.level = level;
+    bar.setAttribute("aria-valuenow", String(remaining));
+    bar.setAttribute("aria-valuetext", `Codex 剩余额度 ${remaining}%`);
+    const fill = bar.querySelector(".quota-fill");
+    if (fill) fill.style.width = `${remaining}%`;
+
+    const summary = `Codex 剩余 ${remaining}%${stale ? "（缓存）" : ""}`;
+    const details = windows.slice(0, 4).map((entry) => {
+      const reset = resetLabel(entry.resetsAt);
+      return `${entry.bucketLabel} · ${entry.windowLabel} ${entry.remaining}%${reset ? ` · ${reset}` : ""}`;
+    });
+    const extras = quotaExtras(state.quota.result);
+    if (stale && state.quota?.message) extras.unshift(state.quota.message);
+    if (state.quota?.updatedAt) {
+      const updated = new Date(state.quota.updatedAt);
+      if (!Number.isNaN(updated.getTime())) extras.push(`更新于 ${updated.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}`);
+    }
+    setQuotaText("quota-summary", summary);
+    setQuotaText("quota-detail", details.join("\n"));
+    setQuotaText("quota-extra", extras.join(" · "));
+    bar.title = `${summary}｜${details[0] || ""}`;
+  }
+
+  function updateQuota(input) {
+    state.quota = input && typeof input === "object" ? input : { status: "error", result: null, message: "额度状态无效" };
+    if (!state.config.quotaBarEnabled) {
+      clearInterval(state.quotaTimer);
+      state.quotaTimer = 0;
+      if (state.host) state.host.dataset.quotaEnabled = "false";
+      return { active: false };
+    }
+    const host = ensureHost();
+    host.dataset.quotaEnabled = "true";
+    updateQuotaView();
+    if (!state.quotaTimer) state.quotaTimer = setInterval(updateQuotaView, 1000);
+    return { active: true };
+  }
+
   function compactTitle() {
     const raw = (document.title || "Codex").replace(/\s*[—–|-]\s*Codex.*$/i, "").trim();
     return raw && raw.toLowerCase() !== "codex" ? raw.slice(0, 64) : "当前 Codex 任务";
@@ -315,16 +479,23 @@
     if (!state.clockTimer) state.clockTimer = setInterval(updateClock, 15000);
   }
 
-  function destroy() {
+  function disableLayout() {
     clearTimeout(state.refreshTimer);
     clearInterval(state.clockTimer);
     state.refreshTimer = 0;
     state.clockTimer = 0;
     state.observer?.disconnect();
     state.observer = null;
-    document.getElementById(HOST_ID)?.remove();
     document.getElementById(STYLE_ID)?.remove();
     document.documentElement.removeAttribute("data-codex-layout-theme");
+    if (state.host) state.host.dataset.layoutActive = "false";
+  }
+
+  function destroy() {
+    disableLayout();
+    clearInterval(state.quotaTimer);
+    state.quotaTimer = 0;
+    document.getElementById(HOST_ID)?.remove();
     state.host = null;
   }
 
@@ -332,12 +503,21 @@
     const config = normalize(input);
     state.config = config;
     if (!config.enabled || config.layoutTheme === "original") {
-      destroy();
+      disableLayout();
+      if (config.quotaBarEnabled) {
+        const host = ensureHost();
+        host.dataset.quotaEnabled = "true";
+        updateQuota(state.quota);
+      } else {
+        destroy();
+      }
       return { active: false, theme: "original" };
     }
 
     const host = ensureHost();
     ensureAppStyle();
+    host.dataset.layoutActive = "true";
+    host.dataset.quotaEnabled = String(config.quotaBarEnabled);
     host.dataset.theme = config.layoutTheme;
     host.style.setProperty("--accent", config.accentColor);
     host.style.setProperty("--fg", config.foregroundColor);
@@ -349,5 +529,5 @@
     return { active: true, theme: config.layoutTheme };
   }
 
-  globalThis[API_NAME] = { apply, destroy, version: "2.0.1" };
+  globalThis[API_NAME] = { apply, updateQuota, destroy, version: "2.1.0" };
 })();

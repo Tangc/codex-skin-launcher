@@ -5,6 +5,7 @@ import path from "node:path";
 import process from "node:process";
 import crypto from "node:crypto";
 import { isMainCodexTarget } from "./target-filter.js";
+import { CodexRateLimitClient } from "./rate-limit-client.js";
 
 function argument(name, fallback = "") {
   const index = process.argv.indexOf(name);
@@ -15,10 +16,14 @@ const configPath = argument("--config");
 const statusPath = argument("--status");
 const port = Number(argument("--port", "9333"));
 const parentPid = Number(argument("--parent-pid", "0"));
+const codexBinPath = argument("--codex-bin");
 const testTargetURL = process.env.CODEX_SKIN_TEST_TARGET_URL || "";
+const testRateLimitJSON = process.env.CODEX_SKIN_TEST_RATE_LIMIT_JSON || "";
 const logPath = path.join(path.dirname(statusPath), "injector.log");
 const layoutSourcePath = path.join(path.dirname(process.argv[1]), "layout-themes.js");
 const layoutSource = fs.readFileSync(layoutSourcePath, "utf8");
+const sidebarFilterSourcePath = path.join(path.dirname(process.argv[1]), "sidebar-filter.js");
+const sidebarFilterSource = fs.readFileSync(sidebarFilterSourcePath, "utf8");
 const sessions = new Map();
 
 let currentCSS = "";
@@ -26,9 +31,24 @@ let currentHash = "";
 let currentLayoutExpression = "";
 let currentLayoutHash = "";
 let currentLayoutName = "original";
+let currentLayoutConfig = {
+  enabled: true,
+  layoutTheme: "original",
+  quotaBarEnabled: false,
+  accentColor: "#7C9CFF",
+  backgroundColor: "#0D1117",
+  foregroundColor: "#E8EDF5",
+};
+let currentQuotaState = {
+  status: codexBinPath ? "loading" : "unavailable",
+  result: null,
+  message: codexBinPath ? "正在读取 Codex 额度" : "未连接额度数据源",
+  updatedAt: new Date().toISOString(),
+};
 let configMtime = 0;
 let stopping = false;
 let lastStatusJSON = "";
+let rateLimitClient = null;
 
 function log(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
@@ -61,6 +81,23 @@ function writeStatus(state, targetCount, message, lastError = "") {
 
 function layoutDisplayName(name) {
   return ({ wechat: "微信式", feishu: "飞书式", qq2007: "QQ 2007 复古式" })[name] || "原始";
+}
+
+function rebuildLayoutExpression() {
+  const layoutJSON = JSON.stringify(currentLayoutConfig);
+  const quotaJSON = JSON.stringify(currentQuotaState);
+  currentLayoutExpression = `${layoutSource}\n${sidebarFilterSource}\n;globalThis.__codexSkinLayoutEngine.apply(${layoutJSON});globalThis.__codexSkinLayoutEngine.updateQuota(${quotaJSON});globalThis.__codexSkinSidebarFilter.apply({enabled:true});`;
+  currentLayoutHash = crypto.createHash("sha256").update(`${layoutJSON}\0${quotaJSON}`).digest("hex");
+}
+
+function updateQuotaState(nextState) {
+  currentQuotaState = nextState && typeof nextState === "object" ? nextState : {
+    status: "error",
+    result: null,
+    message: "额度状态无效",
+    updatedAt: new Date().toISOString(),
+  };
+  rebuildLayoutExpression();
 }
 
 function clamp(value, minimum, maximum, fallback) {
@@ -344,17 +381,16 @@ function loadConfigIfChanged() {
   const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
   currentCSS = buildCSS(config);
   currentHash = crypto.createHash("sha256").update(currentCSS).digest("hex");
-  const layoutConfig = {
+  currentLayoutConfig = {
     enabled: config.enabled !== false,
     layoutTheme: typeof config.layoutTheme === "string" ? config.layoutTheme : "original",
+    quotaBarEnabled: config.quotaBarEnabled === true,
     accentColor: config.accentColor,
     backgroundColor: config.backgroundColor,
     foregroundColor: config.foregroundColor,
   };
-  currentLayoutName = layoutConfig.enabled ? layoutConfig.layoutTheme : "original";
-  const layoutJSON = JSON.stringify(layoutConfig);
-  currentLayoutExpression = `${layoutSource}\n;globalThis.__codexSkinLayoutEngine.apply(${layoutJSON});`;
-  currentLayoutHash = crypto.createHash("sha256").update(layoutJSON).digest("hex");
+  currentLayoutName = currentLayoutConfig.enabled ? currentLayoutConfig.layoutTheme : "original";
+  rebuildLayoutExpression();
   configMtime = stat.mtimeMs;
   log(`已载入皮肤配置，布局 ${layoutDisplayName(currentLayoutName)}，样式 ${Math.round(currentCSS.length / 1024)} KB`);
   return true;
@@ -416,13 +452,17 @@ async function tick() {
     writeStatus("error", 0, "皮肤注入失败", lastError);
   } else {
     const layoutStatus = currentLayoutName !== "original" ? `，${layoutDisplayName(currentLayoutName)}布局已启用` : "";
-    writeStatus("connected", sessions.size, currentCSS ? `皮肤已应用到 ${sessions.size} 个主窗口${layoutStatus}` : "已恢复 Codex 原始外观");
+    const quotaStatus = currentLayoutConfig.quotaBarEnabled
+      ? (currentQuotaState.status === "ready" ? "，额度血条已连接" : "，额度血条连接中")
+      : "";
+    writeStatus("connected", sessions.size, currentCSS ? `皮肤已应用到 ${sessions.size} 个主窗口${layoutStatus}${quotaStatus}` : `已恢复 Codex 原始外观${quotaStatus}`);
   }
 }
 
 async function shutdown() {
   if (stopping) return;
   stopping = true;
+  rateLimitClient?.stop();
   for (const session of sessions.values()) session.close();
   sessions.clear();
   process.exit(0);
@@ -444,6 +484,21 @@ if (!configPath || !statusPath || !Number.isFinite(port)) {
 
 log(`注入器启动，端口 ${port}`);
 writeStatus("waiting", 0, "等待 Codex 启动…");
+
+if (testRateLimitJSON) {
+  try {
+    updateQuotaState(JSON.parse(testRateLimitJSON));
+  } catch (error) {
+    updateQuotaState({ status: "error", result: null, message: `测试额度数据无效：${error.message}`, updatedAt: new Date().toISOString() });
+  }
+} else if (codexBinPath) {
+  rateLimitClient = new CodexRateLimitClient({
+    codexPath: codexBinPath,
+    onState: updateQuotaState,
+    log,
+  });
+  rateLimitClient.start();
+}
 
 if (parentPid > 0) {
   setInterval(() => {

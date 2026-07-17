@@ -25,13 +25,15 @@ xcrun clang \
 
 cp "$PROJECT_DIR/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
 cp "$PROJECT_DIR/Resources/skin-injector.js" "$APP_DIR/Contents/Resources/skin-injector.js"
+cp "$PROJECT_DIR/Resources/rate-limit-client.js" "$APP_DIR/Contents/Resources/rate-limit-client.js"
 cp "$PROJECT_DIR/Resources/layout-themes.js" "$APP_DIR/Contents/Resources/layout-themes.js"
+cp "$PROJECT_DIR/Resources/sidebar-filter.js" "$APP_DIR/Contents/Resources/sidebar-filter.js"
 cp "$PROJECT_DIR/Resources/target-filter.js" "$APP_DIR/Contents/Resources/target-filter.js"
 cp "$PROJECT_DIR/Resources/package.json" "$APP_DIR/Contents/Resources/package.json"
 cp "$PROJECT_DIR/README.md" "$DIST_DIR/使用说明.md"
 
 chmod 755 "$APP_DIR/Contents/MacOS/CodexSkinLauncher"
-chmod 644 "$APP_DIR/Contents/Resources/skin-injector.js" "$APP_DIR/Contents/Resources/layout-themes.js" "$APP_DIR/Contents/Resources/target-filter.js" "$APP_DIR/Contents/Resources/package.json" "$APP_DIR/Contents/Info.plist"
+chmod 644 "$APP_DIR/Contents/Resources/skin-injector.js" "$APP_DIR/Contents/Resources/rate-limit-client.js" "$APP_DIR/Contents/Resources/layout-themes.js" "$APP_DIR/Contents/Resources/sidebar-filter.js" "$APP_DIR/Contents/Resources/target-filter.js" "$APP_DIR/Contents/Resources/package.json" "$APP_DIR/Contents/Info.plist"
 
 plutil -lint "$APP_DIR/Contents/Info.plist"
 codesign --force --deep --sign - "$APP_DIR"
