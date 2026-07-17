@@ -1,0 +1,132 @@
+<Window x:Class="CodexSkinLauncher.Windows.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Codex 换肤启动器 · Windows"
+        Width="1080" Height="800" MinWidth="920" MinHeight="680"
+        WindowStartupLocation="CenterScreen"
+        Background="#08111F" Foreground="#E8EDF5"
+        Loaded="Window_Loaded" Closing="Window_Closing">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="44" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="380" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Row="0" Grid.Column="0" Background="#0E192A" BorderBrush="#273650" BorderThickness="0,0,1,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="24,22,24,30">
+                    <TextBlock Text="Codex 换肤启动器" FontSize="25" FontWeight="SemiBold" />
+                    <TextBlock Text="WINDOWS · COMMUNITY TOOL" Margin="1,4,0,18" Foreground="#7C9CFF" FontSize="11" FontWeight="SemiBold" />
+
+                    <CheckBox x:Name="EnabledCheckBox" Content="启用皮肤" IsChecked="True" FontSize="15"
+                              Checked="SettingsChanged" Unchecked="SettingsChanged" Margin="0,0,0,18" />
+
+                    <TextBlock Text="背景图片" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,9" />
+                    <WrapPanel Margin="0,0,0,9">
+                        <Button Content="选择图片" Click="ChooseImage_Click" Margin="0,0,8,0" />
+                        <Button Content="移除" Click="RemoveImage_Click" />
+                    </WrapPanel>
+                    <TextBlock x:Name="WallpaperNameText" Text="未选择背景图" Foreground="#94A2B8" TextTrimming="CharacterEllipsis" Margin="0,0,0,9" />
+                    <ComboBox x:Name="ImageFitComboBox" SelectionChanged="SettingsChanged" Margin="0,0,0,22">
+                        <ComboBoxItem Content="铺满窗口" Tag="cover" IsSelected="True" />
+                        <ComboBoxItem Content="完整显示" Tag="contain" />
+                    </ComboBox>
+
+                    <TextBlock Text="颜色" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,9" />
+                    <Grid Margin="0,0,0,22">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,7,0">
+                            <TextBlock Text="背景色" Foreground="#AAB6C9" FontSize="12" Margin="0,0,0,5" />
+                            <Button x:Name="BackgroundColorButton" Tag="background" Click="ChooseColor_Click" Height="36" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Margin="3,0,4,0">
+                            <TextBlock Text="文字色" Foreground="#AAB6C9" FontSize="12" Margin="0,0,0,5" />
+                            <Button x:Name="ForegroundColorButton" Tag="foreground" Click="ChooseColor_Click" Height="36" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Margin="7,0,0,0">
+                            <TextBlock Text="强调色" Foreground="#AAB6C9" FontSize="12" Margin="0,0,0,5" />
+                            <Button x:Name="AccentColorButton" Tag="accent" Click="ChooseColor_Click" Height="36" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="背景效果" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10" />
+                    <DockPanel><TextBlock Text="遮罩" /><TextBlock x:Name="OverlayValueText" DockPanel.Dock="Right" HorizontalAlignment="Right" Foreground="#9EACC1" /></DockPanel>
+                    <Slider x:Name="OverlaySlider" Minimum="0" Maximum="0.95" Value="0.58" TickFrequency="0.01" ValueChanged="SettingsChanged" />
+                    <DockPanel><TextBlock Text="面板透明度" /><TextBlock x:Name="PanelValueText" DockPanel.Dock="Right" HorizontalAlignment="Right" Foreground="#9EACC1" /></DockPanel>
+                    <Slider x:Name="PanelSlider" Minimum="0.25" Maximum="1" Value="0.78" TickFrequency="0.01" ValueChanged="SettingsChanged" />
+                    <DockPanel><TextBlock Text="模糊" /><TextBlock x:Name="BlurValueText" DockPanel.Dock="Right" HorizontalAlignment="Right" Foreground="#9EACC1" /></DockPanel>
+                    <Slider x:Name="BlurSlider" Minimum="0" Maximum="30" Value="3" TickFrequency="1" ValueChanged="SettingsChanged" />
+                    <DockPanel><TextBlock Text="亮度" /><TextBlock x:Name="BrightnessValueText" DockPanel.Dock="Right" HorizontalAlignment="Right" Foreground="#9EACC1" /></DockPanel>
+                    <Slider x:Name="BrightnessSlider" Minimum="0.4" Maximum="1.25" Value="0.86" TickFrequency="0.01" ValueChanged="SettingsChanged" />
+                    <DockPanel><TextBlock Text="饱和度" /><TextBlock x:Name="SaturationValueText" DockPanel.Dock="Right" HorizontalAlignment="Right" Foreground="#9EACC1" /></DockPanel>
+                    <Slider x:Name="SaturationSlider" Minimum="0" Maximum="1.5" Value="0.92" TickFrequency="0.01" ValueChanged="SettingsChanged" Margin="0,2,0,20" />
+
+                    <TextBlock Text="字体" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,9" />
+                    <TextBlock Text="UI 字体（留空使用默认）" Foreground="#AAB6C9" FontSize="12" />
+                    <TextBox x:Name="UiFontTextBox" TextChanged="SettingsChanged" Margin="0,5,0,10" />
+                    <TextBlock Text="代码字体（留空使用默认）" Foreground="#AAB6C9" FontSize="12" />
+                    <TextBox x:Name="CodeFontTextBox" TextChanged="SettingsChanged" Margin="0,5,0,20" />
+
+                    <WrapPanel>
+                        <Button Content="重新启动 Codex" Click="RestartCodex_Click" Margin="0,0,8,0" />
+                        <Button Content="恢复默认" Click="Reset_Click" />
+                    </WrapPanel>
+                    <TextBlock Text="设置会自动保存并实时生效。启动器会重启 Codex，请先结束正在运行的任务。"
+                               Foreground="#8493AA" FontSize="11" TextWrapping="Wrap" Margin="0,13,0,0" />
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <Grid Grid.Row="0" Grid.Column="1" Margin="34">
+            <Border x:Name="PreviewBorder" CornerRadius="20" Background="#0D1117" ClipToBounds="True" BorderBrush="#2B3A54" BorderThickness="1">
+                <Grid>
+                    <Border x:Name="PreviewWallpaper" />
+                    <Border x:Name="PreviewOverlay" Background="#940D1117" />
+                    <Grid Margin="26">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="165" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" x:Name="PreviewSidebar" CornerRadius="13" Background="#C70D1117" Padding="17">
+                            <StackPanel>
+                                <TextBlock Text="CODEX" FontWeight="Bold" FontSize="13" />
+                                <Border Height="1" Background="#486078" Margin="0,15" />
+                                <TextBlock Text="新任务" Foreground="#DDE6F3" Margin="0,0,0,15" />
+                                <TextBlock Text="最近任务" Foreground="#8F9FB7" Margin="0,0,0,8" />
+                                <TextBlock Text="实现 Windows 版" Foreground="#B7C3D5" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="1" x:Name="PreviewPanel" CornerRadius="13" Background="#C70D1117" Margin="14,0,0,0" Padding="24">
+                            <StackPanel>
+                                <TextBlock Text="效果预览" FontSize="22" FontWeight="SemiBold" />
+                                <TextBlock Text="背景图、颜色与透明度会同步到 Codex。" Foreground="#A9B6C9" Margin="0,8,0,24" />
+                                <Border Background="#92212C40" CornerRadius="10" Padding="16" Margin="0,0,0,12">
+                                    <TextBlock Text="一键启动后自动连接，不需要用户执行命令。" TextWrapping="Wrap" />
+                                </Border>
+                                <Border x:Name="PreviewAccent" Background="#7C9CFF" CornerRadius="8" Padding="12,8" HorizontalAlignment="Left">
+                                    <TextBlock Text="强调色" Foreground="White" FontWeight="SemiBold" />
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Background="#0A1423" BorderBrush="#263650" BorderThickness="0,1,0,0">
+            <DockPanel Margin="20,0">
+                <Ellipse x:Name="StatusDot" Width="9" Height="9" Fill="#E5A84B" Margin="0,0,9,0" />
+                <TextBlock x:Name="StatusText" Text="准备启动 Codex…" VerticalAlignment="Center" />
+                <TextBlock Text="v1.1.0 · Windows x64" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="#718198" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>
