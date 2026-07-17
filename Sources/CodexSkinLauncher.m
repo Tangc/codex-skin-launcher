@@ -22,6 +22,7 @@ static NSInteger const DebuggingPort = 9333;
 @property(nonatomic, strong) NSTextField *brightnessValue;
 @property(nonatomic, strong) NSTextField *saturationValue;
 @property(nonatomic, strong) NSPopUpButton *fitPicker;
+@property(nonatomic, strong) NSPopUpButton *layoutPicker;
 @property(nonatomic, strong) NSTextField *uiFontField;
 @property(nonatomic, strong) NSTextField *codeFontField;
 @property(nonatomic, strong) NSButton *enabledSwitch;
@@ -123,31 +124,31 @@ static NSInteger const DebuggingPort = 9333;
 }
 
 - (void)buildWindow {
-    NSRect frame = NSMakeRect(0, 0, 760, 720);
+    NSRect frame = NSMakeRect(0, 0, 760, 790);
     self.window = [[NSWindow alloc] initWithContentRect:frame
                                              styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable
                                                backing:NSBackingStoreBuffered
                                                  defer:NO];
-    self.window.title = @"Codex 换肤启动器";
-    self.window.minSize = NSMakeSize(760, 720);
-    self.window.maxSize = NSMakeSize(760, 720);
+    self.window.title = @"Codex 皮肤与布局启动器";
+    self.window.minSize = NSMakeSize(760, 790);
+    self.window.maxSize = NSMakeSize(760, 790);
     [self.window center];
 
     NSView *root = self.window.contentView;
     root.wantsLayer = YES;
     root.layer.backgroundColor = [NSColor colorWithRed:0.035 green:0.055 blue:0.10 alpha:1].CGColor;
 
-    NSTextField *title = [self label:@"Codex 换肤启动器" frame:NSMakeRect(28, 660, 320, 34) size:25 weight:NSFontWeightBold];
+    NSTextField *title = [self label:@"Codex 皮肤与布局启动器" frame:NSMakeRect(28, 730, 380, 34) size:25 weight:NSFontWeightBold];
     [root addSubview:title];
-    NSTextField *subtitle = [self label:@"打开后自动启动 Codex；设置自动保存并实时应用" frame:NSMakeRect(29, 638, 430, 20) size:13 weight:NSFontWeightRegular];
+    NSTextField *subtitle = [self label:@"打开后自动启动 Codex；皮肤与工作台布局实时应用" frame:NSMakeRect(29, 708, 460, 20) size:13 weight:NSFontWeightRegular];
     subtitle.textColor = [NSColor colorWithWhite:0.65 alpha:1];
     [root addSubview:subtitle];
-    self.statusLabel = [self label:@"准备启动" frame:NSMakeRect(470, 652, 260, 38) size:12 weight:NSFontWeightMedium];
+    self.statusLabel = [self label:@"准备启动" frame:NSMakeRect(470, 722, 260, 38) size:12 weight:NSFontWeightMedium];
     self.statusLabel.alignment = NSTextAlignmentRight;
     self.statusLabel.maximumNumberOfLines = 2;
     [root addSubview:self.statusLabel];
 
-    NSBox *imagePanel = [self panel:@"背景图片" frame:NSMakeRect(24, 458, 712, 166)];
+    NSBox *imagePanel = [self panel:@"背景图片" frame:NSMakeRect(24, 528, 712, 166)];
     [root addSubview:imagePanel];
     NSView *imageContent = imagePanel.contentView;
     self.imagePreview = [[NSImageView alloc] initWithFrame:NSMakeRect(10, 9, 220, 114)];
@@ -171,7 +172,7 @@ static NSInteger const DebuggingPort = 9333;
     imageHint.textColor = [NSColor colorWithWhite:0.58 alpha:1];
     [imageContent addSubview:imageHint];
 
-    NSBox *colorPanel = [self panel:@"颜色" frame:NSMakeRect(24, 367, 712, 78)];
+    NSBox *colorPanel = [self panel:@"颜色" frame:NSMakeRect(24, 437, 712, 78)];
     [root addSubview:colorPanel];
     NSView *colorContent = colorPanel.contentView;
     NSArray<NSString *> *colorTitles = @[@"背景基色", @"文字颜色", @"强调颜色"];
@@ -186,6 +187,18 @@ static NSInteger const DebuggingPort = 9333;
         if (index == 1) self.foregroundColorWell = well;
         if (index == 2) self.accentColorWell = well;
     }
+
+    NSBox *layoutPanel = [self panel:@"Codex 工作台布局" frame:NSMakeRect(24, 367, 712, 58)];
+    [root addSubview:layoutPanel];
+    NSView *layoutContent = layoutPanel.contentView;
+    self.layoutPicker = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(12, 2, 250, 28) pullsDown:NO];
+    [self.layoutPicker addItemsWithTitles:@[@"原始布局", @"微信式工作台", @"飞书式工作台", @"QQ 2007 复古工作台"]];
+    self.layoutPicker.target = self;
+    self.layoutPicker.action = @selector(settingsChanged:);
+    [layoutContent addSubview:self.layoutPicker];
+    NSTextField *layoutHint = [self label:@"改变 Codex 内部的工具栏、任务区和信息栏结构" frame:NSMakeRect(280, 6, 390, 20) size:12 weight:NSFontWeightRegular];
+    layoutHint.textColor = [NSColor colorWithWhite:0.58 alpha:1];
+    [layoutContent addSubview:layoutHint];
 
     NSBox *effectPanel = [self panel:@"图片与面板效果" frame:NSMakeRect(24, 173, 712, 181)];
     [root addSubview:effectPanel];
@@ -210,7 +223,7 @@ static NSInteger const DebuggingPort = 9333;
 
     self.enabledSwitch = [[NSButton alloc] initWithFrame:NSMakeRect(29, 51, 120, 28)];
     self.enabledSwitch.buttonType = NSButtonTypeSwitch;
-    self.enabledSwitch.title = @"启用皮肤";
+    self.enabledSwitch.title = @"启用皮肤与布局";
     self.enabledSwitch.target = self;
     self.enabledSwitch.action = @selector(settingsChanged:);
     self.enabledSwitch.contentTintColor = [NSColor colorWithWhite:0.92 alpha:1];
@@ -248,6 +261,7 @@ static NSInteger const DebuggingPort = 9333;
 - (NSDictionary *)defaultSettings {
     return @{
         @"enabled": @YES,
+        @"layoutTheme": @"original",
         @"selectedImagePath": @"",
         @"backgroundImagePath": @"",
         @"backgroundColor": @"#0D1117",
@@ -273,6 +287,9 @@ static NSInteger const DebuggingPort = 9333;
     }
 
     self.enabledSwitch.state = [settings[@"enabled"] boolValue] ? NSControlStateValueOn : NSControlStateValueOff;
+    NSString *layoutTheme = settings[@"layoutTheme"] ?: @"original";
+    NSInteger layoutIndex = [layoutTheme isEqualToString:@"wechat"] ? 1 : ([layoutTheme isEqualToString:@"feishu"] ? 2 : ([layoutTheme isEqualToString:@"qq2007"] ? 3 : 0));
+    [self.layoutPicker selectItemAtIndex:layoutIndex];
     self.selectedImagePath = settings[@"selectedImagePath"] ?: @"";
     self.backgroundImagePath = settings[@"backgroundImagePath"] ?: @"";
     self.backgroundColorWell.color = [self colorFromHex:settings[@"backgroundColor"] fallback:@"#0D1117"];
@@ -310,6 +327,7 @@ static NSInteger const DebuggingPort = 9333;
 - (void)saveSettings {
     NSDictionary *settings = @{
         @"enabled": @(self.enabledSwitch.state == NSControlStateValueOn),
+        @"layoutTheme": @[@"original", @"wechat", @"feishu", @"qq2007"][MAX(0, MIN(3, self.layoutPicker.indexOfSelectedItem))],
         @"selectedImagePath": self.selectedImagePath ?: @"",
         @"backgroundImagePath": self.backgroundImagePath ?: @"",
         @"backgroundColor": [self hexFromColor:self.backgroundColorWell.color],
