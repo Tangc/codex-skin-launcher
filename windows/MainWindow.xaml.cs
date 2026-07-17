@@ -97,6 +97,13 @@ public partial class MainWindow : Window
         UiFontTextBox.Text = _config.UiFontFamily;
         CodeFontTextBox.Text = _config.CodeFontFamily;
         ImageFitComboBox.SelectedIndex = _config.ImageFit == "contain" ? 1 : 0;
+        LayoutThemeComboBox.SelectedIndex = _config.LayoutTheme switch
+        {
+            "wechat" => 1,
+            "feishu" => 2,
+            "qq2007" => 3,
+            _ => 0
+        };
         UpdateColorButton(BackgroundColorButton, _config.BackgroundColor);
         UpdateColorButton(ForegroundColorButton, _config.ForegroundColor);
         UpdateColorButton(AccentColorButton, _config.AccentColor);
@@ -120,6 +127,7 @@ public partial class MainWindow : Window
         _config.Brightness = BrightnessSlider.Value;
         _config.Saturation = SaturationSlider.Value;
         _config.ImageFit = (ImageFitComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() == "contain" ? "contain" : "cover";
+        _config.LayoutTheme = (LayoutThemeComboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "original";
         _config.UiFontFamily = UiFontTextBox.Text.Trim();
         _config.CodeFontFamily = CodeFontTextBox.Text.Trim();
         _config.BackgroundColor = BackgroundColorButton.Tag?.ToString() ?? "#0D1117";
@@ -253,6 +261,13 @@ public partial class MainWindow : Window
         var accent = BrushFromHex(_config.AccentColor, "#7C9CFF");
         PreviewBorder.Background = background;
         PreviewAccent.Background = accent;
+        PreviewThemeName.Text = _config.LayoutTheme switch
+        {
+            "wechat" => "微信式工作台",
+            "feishu" => "飞书式工作台",
+            "qq2007" => "QQ 2007 复古工作台",
+            _ => "原始布局"
+        };
         Foreground = foreground;
 
         var panelColor = ((SolidColorBrush)background).Color;

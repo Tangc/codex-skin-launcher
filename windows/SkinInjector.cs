@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Net.WebSockets;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -26,6 +27,8 @@ internal sealed class SkinInjector : IAsyncDisposable
     private SkinConfig _config;
     private string _css;
     private string _cssHash;
+    private string _layoutExpression;
+    private string _layoutHash;
     private Task? _loopTask;
     private string _lastStatus = "";
 
@@ -34,7 +37,8 @@ internal sealed class SkinInjector : IAsyncDisposable
         _port = port;
         _config = config.Copy();
         _css = SkinCss.Build(_config);
-        _cssHash = HashCss(_css);
+        _cssHash = HashText(_css);
+        (_layoutExpression, _layoutHash) = BuildLayoutExpression(_config);
         _statusChanged = statusChanged;
     }
 
@@ -47,11 +51,14 @@ internal sealed class SkinInjector : IAsyncDisposable
     {
         var copy = config.Copy();
         var css = SkinCss.Build(copy);
+        var layout = BuildLayoutExpression(copy);
         lock (_configLock)
         {
             _config = copy;
             _css = css;
-            _cssHash = HashCss(css);
+            _cssHash = HashText(css);
+            _layoutExpression = layout.Expression;
+            _layoutHash = layout.Hash;
         }
     }
 
@@ -113,11 +120,15 @@ internal sealed class SkinInjector : IAsyncDisposable
         SkinConfig config;
         string css;
         string hash;
+        string layoutExpression;
+        string layoutHash;
         lock (_configLock)
         {
             config = _config.Copy();
             css = _css;
             hash = _cssHash;
+            layoutExpression = _layoutExpression;
+            layoutHash = _layoutHash;
         }
         string? lastError = null;
 
@@ -132,7 +143,7 @@ internal sealed class SkinInjector : IAsyncDisposable
 
             try
             {
-                await session.ApplyAsync(css, hash, cancellationToken);
+                await session.ApplyAsync(css, hash, layoutExpression, layoutHash, cancellationToken);
             }
             catch (Exception error)
             {
@@ -152,8 +163,16 @@ internal sealed class SkinInjector : IAsyncDisposable
         }
         else
         {
+            var layoutName = config.LayoutTheme switch
+            {
+                "wechat" => "微信式",
+                "feishu" => "飞书式",
+                "qq2007" => "QQ 2007 复古式",
+                _ => "原始"
+            };
+            var layoutSuffix = config.Enabled && config.LayoutTheme != "original" ? $"，{layoutName}布局已启用" : "";
             Report("connected", config.Enabled
-                ? $"皮肤已应用到 {_sessions.Count} 个窗口"
+                ? $"皮肤已应用到 {_sessions.Count} 个窗口{layoutSuffix}"
                 : "已恢复 Codex 原始外观");
         }
     }
@@ -166,8 +185,21 @@ internal sealed class SkinInjector : IAsyncDisposable
         _statusChanged(state, message);
     }
 
-    private static string HashCss(string css) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(css)));
+    private static string HashText(string text) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+
+    private static (string Expression, string Hash) BuildLayoutExpression(SkinConfig config)
+    {
+        var payload = JsonSerializer.Serialize(new
+        {
+            enabled = config.Enabled,
+            layoutTheme = config.LayoutTheme,
+            accentColor = config.AccentColor,
+            backgroundColor = config.BackgroundColor,
+            foregroundColor = config.ForegroundColor
+        });
+        return ($"{LayoutThemeScript.Source}\n;globalThis.__codexSkinLayoutEngine.apply({payload});", HashText(payload));
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -203,6 +235,7 @@ internal sealed class SkinSession : IAsyncDisposable
     private readonly CdpConnection _connection;
     private string _styleSheetId = "";
     private string _lastHash = "";
+    private string _lastLayoutHash = "";
     private DateTime _lastApplied = DateTime.MinValue;
 
     public SkinSession(string url)
@@ -213,9 +246,9 @@ internal sealed class SkinSession : IAsyncDisposable
 
     public string Url { get; }
 
-    public async Task ApplyAsync(string css, string hash, CancellationToken cancellationToken)
+    public async Task ApplyAsync(string css, string hash, string layoutExpression, string layoutHash, CancellationToken cancellationToken)
     {
-        if (hash == _lastHash && DateTime.UtcNow - _lastApplied < TimeSpan.FromSeconds(3.5)) return;
+        if (hash == _lastHash && layoutHash == _lastLayoutHash && DateTime.UtcNow - _lastApplied < TimeSpan.FromSeconds(3.5)) return;
         if (string.IsNullOrWhiteSpace(_styleSheetId)) await InitializeAsync(cancellationToken);
 
         try
@@ -229,7 +262,29 @@ internal sealed class SkinSession : IAsyncDisposable
             await SetStyleSheetTextAsync(css, cancellationToken);
         }
 
+        var layoutResult = await _connection.RequestAsync(
+            "Runtime.evaluate",
+            new Dictionary<string, object?>
+            {
+                ["expression"] = layoutExpression,
+                ["returnByValue"] = true,
+                ["awaitPromise"] = true
+            },
+            cancellationToken
+        );
+        if (layoutResult.TryGetProperty("exceptionDetails", out var exceptionDetails))
+        {
+            var message = exceptionDetails.TryGetProperty("text", out var text) ? text.GetString() : "布局主题脚本执行失败";
+            if (exceptionDetails.TryGetProperty("exception", out var exception) &&
+                exception.TryGetProperty("description", out var description))
+            {
+                message = description.GetString() ?? message;
+            }
+            throw new InvalidOperationException(message);
+        }
+
         _lastHash = hash;
+        _lastLayoutHash = layoutHash;
         _lastApplied = DateTime.UtcNow;
     }
 
@@ -239,6 +294,7 @@ internal sealed class SkinSession : IAsyncDisposable
         await _connection.RequestAsync("Page.enable", null, cancellationToken);
         await _connection.RequestAsync("DOM.enable", null, cancellationToken);
         await _connection.RequestAsync("CSS.enable", null, cancellationToken);
+        await _connection.RequestAsync("Runtime.enable", null, cancellationToken);
         await CreateStyleSheetAsync(cancellationToken);
     }
 
@@ -265,6 +321,19 @@ internal sealed class SkinSession : IAsyncDisposable
         );
 
     public ValueTask DisposeAsync() => _connection.DisposeAsync();
+}
+
+internal static class LayoutThemeScript
+{
+    public static string Source { get; } = Load();
+
+    private static string Load()
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("CodexSkinLauncher.LayoutThemes.js")
+            ?? throw new InvalidOperationException("布局主题资源缺失");
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return reader.ReadToEnd();
+    }
 }
 
 internal sealed class CdpConnection : IAsyncDisposable

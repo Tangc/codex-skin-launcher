@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>实现布局主题 — Codex</title>
+  <style>
+    :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0d1117; color: #e8edf5; }
+    #root { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; background: linear-gradient(135deg, #111827, #182235); }
+    aside { padding: 20px 14px; background: rgb(17 24 39 / .9); border-right: 1px solid #334155; }
+    aside strong { display: block; margin-bottom: 20px; }
+    aside button { width: 100%; padding: 9px; color: inherit; background: #273449; border: 1px solid #3b4c65; border-radius: 8px; }
+    aside ul { padding: 8px 0; list-style: none; color: #9aa8bc; line-height: 2.2; }
+    main { display: grid; grid-template-rows: auto 1fr auto; min-width: 0; padding: 20px 28px; }
+    .heading { border-bottom: 1px solid #334155; padding-bottom: 14px; }
+    .messages { max-width: 760px; width: 100%; margin: 0 auto; padding: 32px 0; }
+    article { margin: 0 0 18px; padding: 16px; background: rgb(35 47 66 / .76); border: 1px solid #3a4a62; border-radius: 12px; }
+    [data-message-author-role="user"] { margin-left: 22%; }
+    pre { white-space: pre-wrap; color: #b8d8ff; }
+    [contenteditable] { max-width: 760px; width: 100%; min-height: 76px; margin: 0 auto; padding: 14px; background: #141d2b; border: 1px solid #40506a; border-radius: 12px; }
+    #test-result { position: fixed; left: 6px; bottom: 36px; z-index: 2147483600; padding: 5px 8px; color: white; background: #111; font: 10px monospace; }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <aside class="sidebar">
+      <strong>Codex 任务</strong>
+      <button aria-label="新任务">＋ 新任务</button>
+      <ul><li>实现布局主题</li><li>Windows 版验证</li><li>发布说明</li></ul>
+    </aside>
+    <main>
+      <header class="heading"><h1>实现 Codex 工作台布局</h1><small>本地测试任务</small></header>
+      <section class="messages">
+        <article data-message-author-role="user">把 Codex 改造成类似微信、飞书和 QQ 2007 的工作台体验。</article>
+        <article><strong>Codex</strong><p>已接入共享布局引擎，同时保留背景图、颜色和字体设置。</p><pre>layoutTheme: "qq2007"</pre></article>
+      </section>
+      <div contenteditable="true">给 Codex 发送消息…</div>
+    </main>
+  </div>
+  <output id="test-result">pending</output>
+  <script src="../Resources/layout-themes.js"></script>
+  <script>
+    const requestedTheme = new URLSearchParams(location.search).get("theme") || "qq2007";
+    const result = globalThis.__codexSkinLayoutEngine.apply({
+      enabled: true,
+      layoutTheme: requestedTheme,
+      accentColor: "#7C9CFF",
+      backgroundColor: "#0D1117",
+      foregroundColor: "#E8EDF5"
+    });
+    const host = document.getElementById("codex-skin-layout-host");
+    const passed = requestedTheme === "original"
+      ? !result.active && !host && !document.documentElement.hasAttribute("data-codex-layout-theme")
+      : result.active && host && host.shadowRoot && document.documentElement.dataset.codexLayoutTheme === requestedTheme;
+    const output = document.getElementById("test-result");
+    output.textContent = passed ? `PASS:${requestedTheme}` : `FAIL:${requestedTheme}`;
+    output.dataset.passed = String(Boolean(passed));
+  </script>
+</body>
+</html>

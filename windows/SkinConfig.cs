@@ -6,6 +6,7 @@ namespace CodexSkinLauncher.Windows;
 public sealed class SkinConfig
 {
     public bool Enabled { get; set; } = true;
+    public string LayoutTheme { get; set; } = "original";
     public string BackgroundImagePath { get; set; } = "";
     public string BackgroundColor { get; set; } = "#0D1117";
     public string ForegroundColor { get; set; } = "#E8EDF5";

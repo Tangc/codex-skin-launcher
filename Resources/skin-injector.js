@@ -15,10 +15,15 @@ const statusPath = argument("--status");
 const port = Number(argument("--port", "9333"));
 const parentPid = Number(argument("--parent-pid", "0"));
 const logPath = path.join(path.dirname(statusPath), "injector.log");
+const layoutSourcePath = path.join(path.dirname(process.argv[1]), "layout-themes.js");
+const layoutSource = fs.readFileSync(layoutSourcePath, "utf8");
 const sessions = new Map();
 
 let currentCSS = "";
 let currentHash = "";
+let currentLayoutExpression = "";
+let currentLayoutHash = "";
+let currentLayoutName = "original";
 let configMtime = 0;
 let stopping = false;
 let lastStatusJSON = "";
@@ -50,6 +55,10 @@ function writeStatus(state, targetCount, message, lastError = "") {
   } catch (error) {
     log(`写入状态失败：${error.message}`);
   }
+}
+
+function layoutDisplayName(name) {
+  return ({ wechat: "微信式", feishu: "飞书式", qq2007: "QQ 2007 复古式" })[name] || "原始";
 }
 
 function clamp(value, minimum, maximum, fallback) {
@@ -268,6 +277,7 @@ class SkinSession {
     this.connection = new CDPConnection(target.webSocketDebuggerUrl);
     this.styleSheetID = "";
     this.lastHash = "";
+    this.lastLayoutHash = "";
     this.lastHealthCheck = 0;
   }
 
@@ -276,6 +286,7 @@ class SkinSession {
     await this.connection.request("Page.enable");
     await this.connection.request("DOM.enable");
     await this.connection.request("CSS.enable");
+    await this.connection.request("Runtime.enable");
     await this.createStyleSheet();
   }
 
@@ -288,10 +299,10 @@ class SkinSession {
     if (!this.styleSheetID) throw new Error("无法创建皮肤样式表");
   }
 
-  async apply(css, hash, forceHealthCheck = false) {
+  async apply(css, hash, layoutExpression, layoutHash, forceHealthCheck = false) {
     if (!this.styleSheetID) await this.initialize();
     const now = Date.now();
-    if (this.lastHash === hash && !forceHealthCheck && now - this.lastHealthCheck < 3500) return;
+    if (this.lastHash === hash && this.lastLayoutHash === layoutHash && !forceHealthCheck && now - this.lastHealthCheck < 3500) return;
 
     try {
       await this.connection.request("CSS.setStyleSheetText", {
@@ -306,7 +317,17 @@ class SkinSession {
         text: css,
       });
     }
+    const layoutResult = await this.connection.request("Runtime.evaluate", {
+      expression: layoutExpression,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (layoutResult?.exceptionDetails) {
+      const detail = layoutResult.exceptionDetails.exception?.description || layoutResult.exceptionDetails.text || "布局主题脚本执行失败";
+      throw new Error(detail);
+    }
     this.lastHash = hash;
+    this.lastLayoutHash = layoutHash;
     this.lastHealthCheck = now;
   }
 
@@ -321,8 +342,19 @@ function loadConfigIfChanged() {
   const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
   currentCSS = buildCSS(config);
   currentHash = crypto.createHash("sha256").update(currentCSS).digest("hex");
+  const layoutConfig = {
+    enabled: config.enabled !== false,
+    layoutTheme: typeof config.layoutTheme === "string" ? config.layoutTheme : "original",
+    accentColor: config.accentColor,
+    backgroundColor: config.backgroundColor,
+    foregroundColor: config.foregroundColor,
+  };
+  currentLayoutName = layoutConfig.enabled ? layoutConfig.layoutTheme : "original";
+  const layoutJSON = JSON.stringify(layoutConfig);
+  currentLayoutExpression = `${layoutSource}\n;globalThis.__codexSkinLayoutEngine.apply(${layoutJSON});`;
+  currentLayoutHash = crypto.createHash("sha256").update(layoutJSON).digest("hex");
   configMtime = stat.mtimeMs;
-  log(`已载入皮肤配置，样式 ${Math.round(currentCSS.length / 1024)} KB`);
+  log(`已载入皮肤配置，布局 ${layoutDisplayName(currentLayoutName)}，样式 ${Math.round(currentCSS.length / 1024)} KB`);
   return true;
 }
 
@@ -367,7 +399,7 @@ async function tick() {
       sessions.set(target.id, session);
     }
     try {
-      await session.apply(currentCSS, currentHash, configChanged);
+      await session.apply(currentCSS, currentHash, currentLayoutExpression, currentLayoutHash, configChanged);
     } catch (error) {
       lastError = error.message;
       log(`页面 ${target.id} 注入失败：${error.message}`);
@@ -381,7 +413,8 @@ async function tick() {
   } else if (lastError && sessions.size === 0) {
     writeStatus("error", 0, "皮肤注入失败", lastError);
   } else {
-    writeStatus("connected", sessions.size, currentCSS ? `皮肤已应用到 ${sessions.size} 个窗口` : "已恢复 Codex 原始外观");
+    const layoutStatus = currentLayoutName !== "original" ? `，${layoutDisplayName(currentLayoutName)}布局已启用` : "";
+    writeStatus("connected", sessions.size, currentCSS ? `皮肤已应用到 ${sessions.size} 个窗口${layoutStatus}` : "已恢复 Codex 原始外观");
   }
 }
 

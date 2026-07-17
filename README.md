@@ -1,4 +1,4 @@
-# Codex Skin Launcher / Codex 换肤启动器
+# Codex Skin Launcher / Codex 皮肤与布局启动器
 
 [![macOS](https://img.shields.io/badge/macOS-13%2B-black?logo=apple)](https://github.com/Tangc/codex-skin-launcher/releases)
 [![Windows](https://img.shields.io/badge/Windows-11-0078D4?logo=windows11)](https://github.com/Tangc/codex-skin-launcher/releases)
@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/Tangc/codex-skin-launcher)](https://github.com/Tangc/codex-skin-launcher/releases/latest)
 
-一个面向 macOS 和 Windows 的 Codex 桌面换肤启动器，可增加背景图片、透明面板和完整的颜色/字体自定义。双击后会自动启动 Codex 并应用上次保存的皮肤，不需要打开终端或手动粘贴 CSS。
+一个面向 macOS 和 Windows 的 Codex 桌面皮肤与布局启动器。除了背景图片、透明面板和颜色/字体自定义，还能把 Codex 改造成微信式、飞书式或 QQ 2007 式工作台。双击后会自动启动 Codex 并应用上次保存的方案，不需要打开终端或手动粘贴 CSS/JavaScript。
 
 > 这是社区项目，不是 OpenAI 官方产品。它依赖 Codex 桌面客户端的内部页面结构，Codex 更新后可能需要同步适配。
 
@@ -15,6 +15,9 @@
 ## 功能
 
 - 自动启动或重启 Codex
+- 四种工作台布局：原始、微信式、飞书式、QQ 2007 复古式
+- 为 Codex 增加顶部工具栏、右侧任务信息栏和底部状态栏
+- 顶部快捷入口会尝试调用 Codex 原有的新任务、文件、终端、变更、浏览器和设置功能
 - 选择本地背景图，支持铺满或完整显示
 - 调整背景色、文字色和强调色
 - 调整遮罩、面板透明度、模糊、亮度和饱和度
@@ -80,9 +83,9 @@ cd codex-skin-launcher
 ## 使用说明
 
 1. 打开启动器后，Codex 会自动启动或重启。
-2. 选择背景图、颜色和字体，效果会实时应用。
+2. 选择工作台布局、背景图、颜色和字体，效果会实时应用。
 3. 保持启动器运行，以便为新窗口和刷新后的页面继续注入皮肤。
-4. 关闭“启用皮肤”即可恢复 Codex 原始外观。
+4. 选择“原始布局”只移除工作台外壳；关闭“启用皮肤与布局”会同时恢复 Codex 原始外观。
 
 启动器会自动重启已经打开的 Codex，因此会结束 Codex 中正在运行的任务。请先等待当前任务完成。
 
@@ -104,7 +107,17 @@ cd codex-skin-launcher
 127.0.0.1:9333
 ```
 
-随后通过 Chrome DevTools Protocol 为 Codex 页面创建独立样式表，并持续监控新窗口、页面刷新和配置变化。背景图会在本地压缩后转换为 Data URL，不会上传到网络。
+随后通过 Chrome DevTools Protocol 为 Codex 页面创建独立样式表，并注入共享的布局主题引擎。引擎使用隔离的 Shadow DOM 生成工具栏和信息栏，不移动 Codex 自己管理的 React 节点；启动器会持续监控新窗口、页面刷新和配置变化。背景图会在本地压缩后转换为 Data URL，不会上传到网络。
+
+三套工作台是对交互结构的重新编排，不是微信、飞书或 QQ 的官方皮肤，也不包含这些产品的商标或素材：
+
+| 布局 | Codex 中的对应体验 |
+| --- | --- |
+| 微信式工作台 | 深色会话栏、聊天气泡、绿色状态提示、右侧任务资料 |
+| 飞书式工作台 | 浅色顶部工具区、卡片化内容区、蓝色协作状态、右侧上下文 |
+| QQ 2007 复古工作台 | 蓝色渐变工具栏、经典描边面板、助手资料卡、底部状态栏 |
+
+窗口宽度小于约 1180 像素时，右侧信息栏会自动隐藏，把空间留给当前任务。快捷入口会根据可见文字和无障碍标签定位 Codex 原有按钮；客户端更新后若某个入口暂时失效，可以继续使用 Codex 原界面操作。
 
 它不会修改 Codex 的 `app.asar`、应用签名或安装目录。Windows 版只读取 MSIX 的 `AppxManifest.xml` 来定位官方入口。退出启动器后，皮肤注入器会停止；但 Codex 的调试端口会保持到该 Codex 进程退出，因此不使用时请同时退出 Codex。
 
@@ -113,15 +126,25 @@ cd codex-skin-launcher
 - 调试端口只绑定 `127.0.0.1`，不要修改为局域网或公网地址；退出启动器后请同时退出 Codex，以关闭该端口。
 - 启动器运行期间，本机其他进程理论上可以访问该调试端口；不要运行来源不明的软件。
 - 背景图和配置只保存在本机。
+- 项目不会上传或保存 Codex 对话内容。布局引擎只读取当前页面标题、路径以及可见按钮的文字/无障碍标签，用于显示任务名称和转发快捷操作。
 - macOS 发布版没有 Apple Developer ID 公证，Windows 发布版当前没有代码签名；可审阅源码并自行构建。
 
 更多信息见 [SECURITY.md](SECURITY.md)。
+
+## 开发验证
+
+```bash
+./scripts/test-layout-themes.sh
+./scripts/build.sh
+```
+
+布局测试会在本机 Chrome 的临时用户目录中依次验证原始、微信式、飞书式和 QQ 2007 式布局，结束后主动关闭测试进程。Windows 版可使用 `dotnet build windows/CodexSkinLauncher.Windows.csproj --configuration Release` 编译验证。
 
 ## 兼容性
 
 - macOS：已在 Apple Silicon 和 Codex `26.715.21316` 上验证。
 - Windows：目标为 Windows 11 x64 和 Microsoft Store / MSIX 版 `OpenAI.Codex`；由 GitHub `windows-latest` Runner 编译验证。
-- Codex 内部 CSS Token 或窗口结构变化时，可能需要更新注入样式。
+- Codex 内部 CSS Token、无障碍标签或窗口结构变化时，可能需要更新注入样式和快捷入口映射。
 
 ## 卸载
 
