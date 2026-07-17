@@ -11,6 +11,7 @@ Codex Skin Launcher 通过 Chrome DevTools Protocol 向本机 Codex 页面注入
 - 背景图经过本地压缩后保存，不会上传。
 - macOS 配置和日志位于 `~/Library/Application Support/Codex Skin Launcher/`。
 - Windows 配置和背景图位于 `%LOCALAPPDATA%\Codex Skin Launcher\`。
+- macOS 实时额度功能通过 Codex App Server 的本机 `stdio` 通道读取额度百分比、窗口和重置时间，不新增监听端口；登录凭证由 Codex 自己管理，不会传给注入页面或写入启动器日志。
 - 项目不会上传或保存 Codex 对话内容，也不会修改 Codex 安装包。布局脚本会读取页面标题、路径和可见按钮标签，用于显示当前任务名称及转发顶部快捷操作。
 
 ## 发布包

@@ -149,6 +149,7 @@ try {
   const statusPath = path.join(temporaryDirectory, "status.json");
   fs.writeFileSync(configPath, JSON.stringify({
     enabled: true,
+    quotaBarEnabled: true,
     layoutTheme: "qq2007",
     backgroundImagePath: "",
     backgroundColor: "#0D1117",
@@ -169,13 +170,32 @@ try {
     "--status", statusPath,
     "--port", port,
     "--parent-pid", String(process.pid),
-  ], { stdio: "ignore", env: { ...process.env, CODEX_SKIN_TEST_TARGET_URL: cleanUrl } });
+  ], {
+    stdio: "ignore",
+    env: {
+      ...process.env,
+      CODEX_SKIN_TEST_TARGET_URL: cleanUrl,
+      CODEX_SKIN_TEST_RATE_LIMIT_JSON: JSON.stringify({
+        status: "ready",
+        updatedAt: new Date().toISOString(),
+        result: {
+          rateLimits: {
+            limitId: "codex",
+            primary: { usedPercent: 72, windowDurationMins: 300, resetsAt: Math.floor(Date.now() / 1000) + 1800 },
+          },
+          rateLimitsByLimitId: null,
+          rateLimitResetCredits: { availableCount: 0 },
+        },
+      }),
+    },
+  });
 
   let injectorPassed = false;
   for (let attempt = 0; attempt < 60; attempt++) {
     await sleep(100);
     const evaluation = await connection.request("Runtime.evaluate", {
-      expression: `document.documentElement.dataset.codexLayoutTheme === "qq2007" && Boolean(document.getElementById("codex-skin-layout-host")?.shadowRoot)`,
+      expression: `document.documentElement.dataset.codexLayoutTheme === "qq2007"
+        && document.getElementById("codex-skin-layout-host")?.shadowRoot?.querySelector(".quota-bar")?.getAttribute("aria-valuenow") === "28"`,
       returnByValue: true,
     });
     injectorPassed = evaluation.result?.value === true;
@@ -201,7 +221,8 @@ try {
   for (let attempt = 0; attempt < 50; attempt++) {
     await sleep(100);
     const evaluation = await connection.request("Runtime.evaluate", {
-      expression: `!document.documentElement.hasAttribute("data-codex-layout-theme") && !document.getElementById("codex-skin-layout-host")`,
+      expression: `!document.documentElement.hasAttribute("data-codex-layout-theme")
+        && document.getElementById("codex-skin-layout-host")?.shadowRoot?.querySelector(".quota-bar")?.getAttribute("aria-valuenow") === "28"`,
       returnByValue: true,
     });
     restored = evaluation.result?.value === true;
