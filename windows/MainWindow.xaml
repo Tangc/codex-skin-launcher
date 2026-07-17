@@ -134,7 +134,7 @@
             <DockPanel Margin="20,0">
                 <Ellipse x:Name="StatusDot" Width="9" Height="9" Fill="#E5A84B" Margin="0,0,9,0" />
                 <TextBlock x:Name="StatusText" Text="准备启动 Codex…" VerticalAlignment="Center" />
-                <TextBlock Text="v2.0.0 · Windows x64" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="#718198" />
+                <TextBlock Text="v2.0.1 · Windows x64" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="#718198" />
             </DockPanel>
         </Border>
     </Grid>

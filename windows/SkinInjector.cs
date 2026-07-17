@@ -107,7 +107,7 @@ internal sealed class SkinInjector : IAsyncDisposable
         }
 
         var pages = (targets ?? [])
-            .Where(target => target.Type == "page" && !string.IsNullOrWhiteSpace(target.WebSocketDebuggerUrl))
+            .Where(IsMainCodexTarget)
             .ToList();
         var activeIds = pages.Select(target => target.Id).ToHashSet(StringComparer.Ordinal);
 
@@ -172,7 +172,7 @@ internal sealed class SkinInjector : IAsyncDisposable
             };
             var layoutSuffix = config.Enabled && config.LayoutTheme != "original" ? $"，{layoutName}布局已启用" : "";
             Report("connected", config.Enabled
-                ? $"皮肤已应用到 {_sessions.Count} 个窗口{layoutSuffix}"
+                ? $"皮肤已应用到 {_sessions.Count} 个主窗口{layoutSuffix}"
                 : "已恢复 Codex 原始外观");
         }
     }
@@ -187,6 +187,11 @@ internal sealed class SkinInjector : IAsyncDisposable
 
     private static string HashText(string text) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+
+    private static bool IsMainCodexTarget(CdpTarget target) =>
+        target.Type == "page" &&
+        !string.IsNullOrWhiteSpace(target.WebSocketDebuggerUrl) &&
+        string.Equals(target.Url, "app://-/index.html", StringComparison.OrdinalIgnoreCase);
 
     private static (string Expression, string Hash) BuildLayoutExpression(SkinConfig config)
     {
@@ -227,6 +232,9 @@ internal sealed class SkinInjector : IAsyncDisposable
 
         [JsonPropertyName("webSocketDebuggerUrl")]
         public string WebSocketDebuggerUrl { get; set; } = "";
+
+        [JsonPropertyName("url")]
+        public string Url { get; set; } = "";
     }
 }
 

@@ -349,5 +349,5 @@
     return { active: true, theme: config.layoutTheme };
   }
 
-  globalThis[API_NAME] = { apply, destroy, version: "2.0.0" };
+  globalThis[API_NAME] = { apply, destroy, version: "2.0.1" };
 })();
